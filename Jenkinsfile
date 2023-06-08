@@ -3,25 +3,15 @@ pipeline {
   options {
     buildDiscarder(logRotator(numToKeepStr: '5'))
   }
-  environment {
-    DOCKERHUB_CREDENTIALS = credentials('dockerhub')
-  }
   stages {
     stage('Build') {
-      steps {
-        sh 'docker build -t fabbro03/test-solar .'
-      }
+      dockerImage = docker.build("fabbro03/solar-simulator:latest")
     }
-    stage('Login') {
-      steps {
-        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
-      }
-    }
-    stage('Push') {
-      steps {
-        sh 'docker push fabbro03/test-solar'
-      }
-    }
+    stage('Push image') {
+        withDockerRegistry([ credentialsId: "dockerhub", url: "" ]) {
+        dockerImage.push()
+        }
+    }    
   }
   post {
     always {
