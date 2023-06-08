@@ -3,7 +3,7 @@ pipeline {
   options {
     buildDiscarder(logRotator(numToKeepStr: '5'))
   }
-  stages {
+  node {
     stage('Build') {
       dockerImage = docker.build("fabbro03/solar-simulator:latest")
     }
