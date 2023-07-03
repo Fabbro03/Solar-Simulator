@@ -1,18 +1,35 @@
+"""
+Copyright (C) 2023  Marco Fabbroni (marco.fabbroni@outlook.it)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
 import paho.mqtt.client as mqtt
 import time
 from datetime import datetime
 
-debug = False
+debug = True
 
 if debug == True:
     import os
     def clear(): return os.system('cls' if os.name == 'nt' else 'clear')
 
 
-# The callback for when the client receives a CONNACK response from the server.
 REAL_GRID_POWER_TOPIC = "energy/Power"
 REAL_SOLAR_POWER_TOPIC = "sim-data/Solar-Pwr"
 BATTERY_WH = 2400
+MIN_GRID_POWER = 50.0
 
 sim_solar_wh = 0.0
 ha_in_grid_wh = 0.0
@@ -39,14 +56,9 @@ try:
 
     def on_connect(client, userdata, flags, rc):
         print("Connected with result code "+str(rc))
-
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
         client.subscribe(REAL_GRID_POWER_TOPIC)
         client.subscribe(REAL_SOLAR_POWER_TOPIC)
         client.subscribe("sim-data/battery-wh")
-
-    # The callback for when a PUBLISH message is received from the server.
 
     def on_message(client, userdata, msg):
         global sim_solar_pwr, mqtt_grid_pwr, battery_cap_wh, started, pwr_msg
@@ -87,7 +99,6 @@ try:
         client.on_connect = on_connect
         client.on_message = on_message
         client.on_disconnect = on_disconnect
-        client.username_pw_set('mosquitto', 'Asusfonepad7$03')
         client.connect("192.168.20.20", 1883, 60)
         client.reconnect_delay_set(1, 10)
         client.loop_start()
@@ -118,8 +129,8 @@ try:
         batt_discharge_limit = 800-sim_solar_pwr
         if (net_pwr < 0):
             if (battery_cap_wh < BATTERY_WH):
-                sim_batt_pwr = net_pwr
-                sim_grid_pwr = 0.0
+                sim_grid_pwr = MIN_GRID_POWER
+                sim_batt_pwr = net_pwr-MIN_GRID_POWER
                 battery_state = "CHARGING"
             else:
                 sim_batt_pwr = 0.0
@@ -132,8 +143,8 @@ try:
                     sim_grid_pwr = grid_pwr - 800
                     battery_state = "MAX DISCHARGING"
                 else:
-                    sim_batt_pwr = net_pwr
-                    sim_grid_pwr = 0.0
+                    sim_batt_pwr = net_pwr+MIN_GRID_POWER
+                    sim_grid_pwr = MIN_GRID_POWER
                     battery_state = "DISCHARGING"
             else:
                 sim_batt_pwr = 0.0
@@ -194,13 +205,14 @@ try:
                   net_pwr, "\nBatt Pwr:", sim_batt_pwr, "\nMax Batt:", batt_discharge_limit, "\nGrid Pwr", sim_grid_pwr, "\nBattery state:", battery_state, "\nBattery SOC:", battery_soc, "\nBattery Cap Wh:", battery_cap_wh, "\nBatt In Wh:", battery_in_wh, "\nBatt Out Wh:", battery_out_wh, "\nGrid In Wh:", ha_in_grid_wh, "\nGrid Out Wh:", ha_out_grid_wh)
 
         cycle_time = datetime.now()-time_now
-        # print(cycle_time.total_seconds(), delta_time.total_seconds())
+
         if ((1-cycle_time.total_seconds()) > 0):
             time.sleep(1-cycle_time.total_seconds())
         else:
             print("Cycle time excedeed:", cycle_time.total_seconds)
 
         loop_last_time = time_now
+
 except Exception as e:
     print(e)
     exit(100)
