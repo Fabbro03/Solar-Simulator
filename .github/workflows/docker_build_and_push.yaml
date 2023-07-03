@@ -3,7 +3,7 @@ name: docker_build_and_push
 on:
   push:
     branches:
-      - "main"
+      - "**"
 
 env:
   REGISTRY_IMAGE: fabbro03/solar-simulator
