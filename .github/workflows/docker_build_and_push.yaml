@@ -3,11 +3,6 @@ name: docker_build_and_push
 on:
   push:
     branches:
-      - "**"
-    tags:
-      - "v*.*.*"
-  pull_request:
-  branches:
       - "main"
 
 env:
