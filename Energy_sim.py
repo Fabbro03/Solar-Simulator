@@ -19,7 +19,7 @@ import paho.mqtt.client as mqtt
 import time
 from datetime import datetime
 
-debug = True
+debug = False
 
 if debug == True:
     import os
@@ -30,6 +30,9 @@ REAL_GRID_POWER_TOPIC = "energy/Power"
 REAL_SOLAR_POWER_TOPIC = "sim-data/Solar-Pwr"
 BATTERY_WH = 2400
 MIN_GRID_POWER = 50.0
+MAX_INV_POWER = 800.0
+INV_EFF = 0.9
+BATT_EFF = 0.84
 
 sim_solar_wh = 0.0
 ha_in_grid_wh = 0.0
@@ -44,6 +47,8 @@ mqtt_grid_pwr = 0.0
 grid_pwr = 0.0
 sim_grid_pwr = 0.0
 sim_solar_pwr = 0.0
+pred_solar_pwr = 0.0
+delta_time = 0.0
 
 started = False
 
@@ -61,10 +66,10 @@ try:
         client.subscribe("sim-data/battery-wh")
 
     def on_message(client, userdata, msg):
-        global sim_solar_pwr, mqtt_grid_pwr, battery_cap_wh, started, pwr_msg
+        global pred_solar_pwr, mqtt_grid_pwr, battery_cap_wh, started, pwr_msg
         if (msg.topic == REAL_SOLAR_POWER_TOPIC):
             if msg.payload != b'NaN':
-                sim_solar_pwr = int(msg.payload)
+                pred_solar_pwr = int(msg.payload)
                 pwr_msg = True
             else:
                 sim_solar_pwr = 0
@@ -92,6 +97,97 @@ try:
 
     def on_disconnect(client, userdata, rc):
         print("mqtt disconnected")
+
+    def send_pwr_mqtt():
+        client.publish("sim-data/real-grid-pwr",
+                       str(round(grid_pwr, 2)), 2, True)
+        # client.publish("sim-data/net-pwr",
+        #               str(round(net_pwr, 2)), 2, True)
+        client.publish("sim-data/batt-pwr",
+                       str(round(sim_batt_pwr, 2)), 2, True)
+        client.publish("sim-data/grid-pwr",
+                       str(round(sim_grid_pwr, 2)), 2, True)
+
+    def send_stats_mqtt():
+        client.publish("sim-data/solar-wh",
+                       str(round(sim_solar_wh, 2)), 2, True)
+        client.publish("sim-data/battery-state",
+                       battery_state, 2, True)
+        client.publish("sim-data/battery-soc",
+                       str(round(battery_soc*100, 2)), 2, True)
+        client.publish("sim-data/battery-wh",
+                       str(round(battery_cap_wh, 2)), 2, True)
+        client.publish("sim-data/battery-in-wh",
+                       str(round(battery_in_wh, 2)), 2, True)
+        client.publish("sim-data/battery-out-wh",
+                       str(round(battery_out_wh, 2)), 2, True)
+        client.publish("sim-data/in-grid-wh",
+                       str(round(ha_in_grid_wh, 2)), 2, True)
+        client.publish("sim-data/out-grid-wh",
+                       str(round(ha_out_grid_wh, 2)), 2, True)
+
+    def int_energy():
+        global battery_cap_wh, battery_in_wh, battery_out_wh, ha_out_grid_wh, ha_in_grid_wh, sim_solar_wh
+
+        sim_solar_wh = integrate(sim_solar_wh, sim_solar_pwr, delta_time)
+        battery_cap_wh = integrate(battery_cap_wh, -sim_batt_pwr, delta_time)
+        if (sim_batt_pwr < 0):
+            battery_in_wh = integrate(battery_in_wh, -sim_batt_pwr, delta_time)
+        else:
+            battery_out_wh = integrate(
+                battery_out_wh, sim_batt_pwr, delta_time)
+
+        if (sim_grid_pwr < 0):
+            ha_out_grid_wh = integrate(
+                ha_out_grid_wh, -sim_grid_pwr, delta_time)
+        else:
+            ha_in_grid_wh = integrate(ha_in_grid_wh, sim_grid_pwr, delta_time)
+
+    def power_calc():
+        global grid_pwr, sim_batt_pwr, sim_grid_pwr, battery_state, sim_solar_pwr
+        # print("--------------------------------------------")
+        grid_pwr = mqtt_grid_pwr
+        # print("GRID DATA", grid_pwr)
+        sim_solar_pwr = pred_solar_pwr/INV_EFF
+        # print("SOLAR PWR", sim_solar_pwr)
+        req_out_inv_pwr = 0.0
+        if grid_pwr < (MAX_INV_POWER+MIN_GRID_POWER):
+            req_out_inv_pwr = grid_pwr - MIN_GRID_POWER
+            if req_out_inv_pwr < 0:
+                req_out_inv_pwr = 0.0
+        else:
+            req_out_inv_pwr = 800.0
+        # print("R INV OUT", req_out_inv_pwr)
+        req_in_inv_pwr = req_out_inv_pwr/INV_EFF
+        # print("R INV IN", req_in_inv_pwr)
+        req_battery_pwr = req_in_inv_pwr - sim_solar_pwr
+        # print("R BATT OUT", req_battery_pwr)
+        if req_battery_pwr > 0:
+            if (battery_cap_wh > BATTERY_WH/10.0):
+                battery_state = "DISCHARGING"
+                sim_batt_pwr = req_battery_pwr/BATT_EFF
+            else:
+                battery_state = "EMPTY"
+                sim_batt_pwr = 0
+        else:
+            if battery_cap_wh < BATTERY_WH:
+                sim_batt_pwr = req_battery_pwr*BATT_EFF
+                battery_state = "CHARGING"
+            else:
+                sim_batt_pwr = 0
+                battery_state = "FULL"
+        # print("REAL BATT PWR", sim_batt_pwr)
+        if sim_batt_pwr < 0:
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/BATT_EFF)*INV_EFF
+        else:
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*BATT_EFF)*INV_EFF
+
+        if real_inv_pwr > 800:
+            real_inv_pwr = 800
+
+        # print("REAL INV OUT", real_inv_pwr)
+        sim_grid_pwr = grid_pwr - real_inv_pwr
+        # print("REAL GRID", sim_grid_pwr)
 
     try:
         print("mqtt connection setup...")
@@ -123,77 +219,19 @@ try:
     while True:
         time_now = datetime.now()
         delta_time = time_now-loop_last_time
-        grid_pwr = mqtt_grid_pwr
-        sim_solar_wh = integrate(sim_solar_wh, sim_solar_pwr, delta_time)
-        net_pwr = grid_pwr-sim_solar_pwr
-        batt_discharge_limit = 800-sim_solar_pwr
-        if (net_pwr < 0):
-            if (battery_cap_wh < BATTERY_WH):
-                sim_grid_pwr = MIN_GRID_POWER
-                sim_batt_pwr = net_pwr-MIN_GRID_POWER
-                battery_state = "CHARGING"
-            else:
-                sim_batt_pwr = 0.0
-                sim_grid_pwr = net_pwr
-                battery_state = "FULL"
-        else:
-            if (battery_cap_wh > BATTERY_WH/10.0):
-                if (net_pwr > batt_discharge_limit):
-                    sim_batt_pwr = batt_discharge_limit
-                    sim_grid_pwr = grid_pwr - 800
-                    battery_state = "MAX DISCHARGING"
-                else:
-                    sim_batt_pwr = net_pwr+MIN_GRID_POWER
-                    sim_grid_pwr = MIN_GRID_POWER
-                    battery_state = "DISCHARGING"
-            else:
-                sim_batt_pwr = 0.0
-                sim_grid_pwr = net_pwr
-                battery_state = "EMPTY"
 
-        battery_cap_wh = integrate(battery_cap_wh, -sim_batt_pwr, delta_time)
-        if (sim_batt_pwr < 0):
-            battery_in_wh = integrate(battery_in_wh, -sim_batt_pwr, delta_time)
-        else:
-            battery_out_wh = integrate(
-                battery_out_wh, sim_batt_pwr, delta_time)
+        power_calc()
 
-        if (sim_grid_pwr < 0):
-            ha_out_grid_wh = integrate(
-                ha_out_grid_wh, -sim_grid_pwr, delta_time)
-        else:
-            ha_in_grid_wh = integrate(ha_in_grid_wh, sim_grid_pwr, delta_time)
+        int_energy()
 
         battery_soc = battery_cap_wh/BATTERY_WH
         if pwr_msg == True:
-            client.publish("sim-data/real-grid-pwr",
-                           str(round(grid_pwr, 2)), 2, True)
-            client.publish("sim-data/net-pwr",
-                           str(round(net_pwr, 2)), 2, True)
-            client.publish("sim-data/batt-pwr",
-                           str(round(sim_batt_pwr, 2)), 2, True)
-            client.publish("sim-data/grid-pwr",
-                           str(round(sim_grid_pwr, 2)), 2, True)
+            send_pwr_mqtt()
             pwr_msg = False
 
         if ((datetime.now()-last_update).total_seconds() > 10):
             last_update = datetime.now()
-            client.publish("sim-data/solar-wh",
-                           str(round(sim_solar_wh, 2)), 2, True)
-            client.publish("sim-data/battery-state",
-                           battery_state, 2, True)
-            client.publish("sim-data/battery-soc",
-                           str(round(battery_soc*100, 2)), 2, True)
-            client.publish("sim-data/battery-wh",
-                           str(round(battery_cap_wh, 2)), 2, True)
-            client.publish("sim-data/battery-in-wh",
-                           str(round(battery_in_wh, 2)), 2, True)
-            client.publish("sim-data/battery-out-wh",
-                           str(round(battery_out_wh, 2)), 2, True)
-            client.publish("sim-data/in-grid-wh",
-                           str(round(ha_in_grid_wh, 2)), 2, True)
-            client.publish("sim-data/out-grid-wh",
-                           str(round(ha_out_grid_wh, 2)), 2, True)
+            send_stats_mqtt()
 
         if ((datetime.now()-last_loop_log).total_seconds() > 60):
             print("In loop... Cycle time:", delta_time.total_seconds(), "s")
@@ -201,8 +239,8 @@ try:
 
         if debug == True:
             clear()
-            print("Sol pwr:", sim_solar_pwr, "\nSol Wh:", sim_solar_wh, "\nNet pwr:",
-                  net_pwr, "\nBatt Pwr:", sim_batt_pwr, "\nMax Batt:", batt_discharge_limit, "\nGrid Pwr", sim_grid_pwr, "\nBattery state:", battery_state, "\nBattery SOC:", battery_soc, "\nBattery Cap Wh:", battery_cap_wh, "\nBatt In Wh:", battery_in_wh, "\nBatt Out Wh:", battery_out_wh, "\nGrid In Wh:", ha_in_grid_wh, "\nGrid Out Wh:", ha_out_grid_wh)
+            print("Sol pwr:", sim_solar_pwr, "\nSol Wh:", sim_solar_wh, "\nBatt Pwr:", sim_batt_pwr, "\nGrid Pwr", sim_grid_pwr, "\nBattery state:", battery_state,
+                  "\nBattery SOC:", battery_soc, "\nBattery Cap Wh:", battery_cap_wh, "\nBatt In Wh:", battery_in_wh, "\nBatt Out Wh:", battery_out_wh, "\nGrid In Wh:", ha_in_grid_wh, "\nGrid Out Wh:", ha_out_grid_wh)
 
         cycle_time = datetime.now()-time_now
 
