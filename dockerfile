@@ -18,4 +18,4 @@ COPY Energy_sim.py ./
 #CMD instruction should be used to run the software
 #contained by your image, along with any arguments.
 RUN pip install paho-mqtt
-CMD [ "python", "./Energy_sim.py"]
+CMD [ "python", "-u","./Energy_sim.py"]
