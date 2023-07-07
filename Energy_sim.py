@@ -31,6 +31,7 @@ REAL_SOLAR_POWER_TOPIC = "sim-data/Solar-Pwr"
 BATTERY_WH = 2400
 MIN_GRID_POWER = 50.0
 MAX_INV_POWER = 800.0
+CHR_CNTRL_EFF = 0.9
 INV_EFF = 0.9
 BATT_EFF = 0.84
 
@@ -49,6 +50,10 @@ sim_grid_pwr = 0.0
 sim_solar_pwr = 0.0
 pred_solar_pwr = 0.0
 delta_time = 0.0
+
+# ----PWR Statistical Output Var
+stat_solar_pwr = 0.0
+stat_batt_pwr = 0.0
 
 started = False
 
@@ -103,10 +108,12 @@ try:
                        str(round(grid_pwr, 2)), 2, True)
         # client.publish("sim-data/net-pwr",
         #               str(round(net_pwr, 2)), 2, True)
-        client.publish("sim-data/batt-pwr",
-                       str(round(sim_batt_pwr, 2)), 2, True)
+        client.publish("sim-data/stat-batt-pwr",
+                       str(round(stat_batt_pwr, 2)), 2, True)
         client.publish("sim-data/grid-pwr",
                        str(round(sim_grid_pwr, 2)), 2, True)
+        client.publish("sim-data/stat-solar-pwr",
+                       str(round(stat_solar_pwr, 2)), 2, True)
 
     def send_stats_mqtt():
         client.publish("sim-data/solar-wh",
@@ -129,13 +136,15 @@ try:
     def int_energy():
         global battery_cap_wh, battery_in_wh, battery_out_wh, ha_out_grid_wh, ha_in_grid_wh, sim_solar_wh
 
-        sim_solar_wh = integrate(sim_solar_wh, sim_solar_pwr, delta_time)
+        sim_solar_wh = integrate(
+            sim_solar_wh, sim_solar_pwr*CHR_CNTRL_EFF*INV_EFF, delta_time)
         battery_cap_wh = integrate(battery_cap_wh, -sim_batt_pwr, delta_time)
         if (sim_batt_pwr < 0):
-            battery_in_wh = integrate(battery_in_wh, -sim_batt_pwr, delta_time)
+            battery_in_wh = integrate(
+                battery_in_wh, -sim_batt_pwr*INV_EFF, delta_time)
         else:
             battery_out_wh = integrate(
-                battery_out_wh, sim_batt_pwr, delta_time)
+                battery_out_wh, sim_batt_pwr*INV_EFF, delta_time)
 
         if (sim_grid_pwr < 0):
             ha_out_grid_wh = integrate(
@@ -144,12 +153,14 @@ try:
             ha_in_grid_wh = integrate(ha_in_grid_wh, sim_grid_pwr, delta_time)
 
     def power_calc():
-        global grid_pwr, sim_batt_pwr, sim_grid_pwr, battery_state, sim_solar_pwr
-        # print("--------------------------------------------")
+        global grid_pwr, sim_batt_pwr, sim_grid_pwr, battery_state, sim_solar_pwr, stat_solar_pwr, stat_batt_pwr
+        print("--------------------------------------------")
         grid_pwr = mqtt_grid_pwr
-        # print("GRID DATA", grid_pwr)
+        print("GRID DATA", grid_pwr)
         sim_solar_pwr = pred_solar_pwr/INV_EFF
-        # print("SOLAR PWR", sim_solar_pwr)
+        stat_solar_pwr = sim_solar_pwr
+        sim_solar_pwr = sim_solar_pwr*CHR_CNTRL_EFF
+        print("SOLAR PWR", sim_solar_pwr)
         req_out_inv_pwr = 0.0
         if grid_pwr < (MAX_INV_POWER+MIN_GRID_POWER):
             req_out_inv_pwr = grid_pwr - MIN_GRID_POWER
@@ -157,11 +168,11 @@ try:
                 req_out_inv_pwr = 0.0
         else:
             req_out_inv_pwr = 800.0
-        # print("R INV OUT", req_out_inv_pwr)
+        print("R INV OUT", req_out_inv_pwr)
         req_in_inv_pwr = req_out_inv_pwr/INV_EFF
-        # print("R INV IN", req_in_inv_pwr)
+        print("R INV IN", req_in_inv_pwr)
         req_battery_pwr = req_in_inv_pwr - sim_solar_pwr
-        # print("R BATT OUT", req_battery_pwr)
+        print("R BATT OUT", req_battery_pwr)
         if req_battery_pwr > 0:
             if (battery_cap_wh > BATTERY_WH/10.0):
                 battery_state = "DISCHARGING"
@@ -176,18 +187,20 @@ try:
             else:
                 sim_batt_pwr = 0
                 battery_state = "FULL"
-        # print("REAL BATT PWR", sim_batt_pwr)
+        print("REAL BATT PWR", sim_batt_pwr)
         if sim_batt_pwr < 0:
+            stat_batt_pwr = sim_batt_pwr/BATT_EFF
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/BATT_EFF)*INV_EFF
         else:
+            stat_batt_pwr = sim_batt_pwr*BATT_EFF
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*BATT_EFF)*INV_EFF
 
         if real_inv_pwr > 800:
             real_inv_pwr = 800
 
-        # print("REAL INV OUT", real_inv_pwr)
+        print("REAL INV OUT", real_inv_pwr)
         sim_grid_pwr = grid_pwr - real_inv_pwr
-        # print("REAL GRID", sim_grid_pwr)
+        print("REAL GRID", sim_grid_pwr)
 
     try:
         print("mqtt connection setup...")
