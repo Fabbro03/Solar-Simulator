@@ -154,13 +154,13 @@ try:
 
     def power_calc():
         global grid_pwr, sim_batt_pwr, sim_grid_pwr, battery_state, sim_solar_pwr, stat_solar_pwr, stat_batt_pwr
-        print("--------------------------------------------")
+        # print("--------------------------------------------")
         grid_pwr = mqtt_grid_pwr
-        print("GRID DATA", grid_pwr)
+        # print("GRID DATA", grid_pwr)
         sim_solar_pwr = pred_solar_pwr/INV_EFF
         stat_solar_pwr = sim_solar_pwr
         sim_solar_pwr = sim_solar_pwr*CHR_CNTRL_EFF
-        print("SOLAR PWR", sim_solar_pwr)
+        # print("SOLAR PWR", sim_solar_pwr)
         req_out_inv_pwr = 0.0
         if grid_pwr < (MAX_INV_POWER+MIN_GRID_POWER):
             req_out_inv_pwr = grid_pwr - MIN_GRID_POWER
@@ -168,11 +168,11 @@ try:
                 req_out_inv_pwr = 0.0
         else:
             req_out_inv_pwr = 800.0
-        print("R INV OUT", req_out_inv_pwr)
+        # print("R INV OUT", req_out_inv_pwr)
         req_in_inv_pwr = req_out_inv_pwr/INV_EFF
-        print("R INV IN", req_in_inv_pwr)
+        # print("R INV IN", req_in_inv_pwr)
         req_battery_pwr = req_in_inv_pwr - sim_solar_pwr
-        print("R BATT OUT", req_battery_pwr)
+        # print("R BATT OUT", req_battery_pwr)
         if req_battery_pwr > 0:
             if (battery_cap_wh > BATTERY_WH/10.0):
                 battery_state = "DISCHARGING"
@@ -187,7 +187,7 @@ try:
             else:
                 sim_batt_pwr = 0
                 battery_state = "FULL"
-        print("REAL BATT PWR", sim_batt_pwr)
+        # print("REAL BATT PWR", sim_batt_pwr)
         if sim_batt_pwr < 0:
             stat_batt_pwr = sim_batt_pwr/BATT_EFF
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/BATT_EFF)*INV_EFF
@@ -198,9 +198,9 @@ try:
         if real_inv_pwr > 800:
             real_inv_pwr = 800
 
-        print("REAL INV OUT", real_inv_pwr)
+        # print("REAL INV OUT", real_inv_pwr)
         sim_grid_pwr = grid_pwr - real_inv_pwr
-        print("REAL GRID", sim_grid_pwr)
+        # print("REAL GRID", sim_grid_pwr)
 
     try:
         print("mqtt connection setup...")
