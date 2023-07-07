@@ -189,10 +189,10 @@ try:
                 battery_state = "FULL"
         # print("REAL BATT PWR", sim_batt_pwr)
         if sim_batt_pwr < 0:
-            stat_batt_pwr = sim_batt_pwr/BATT_EFF
+            stat_batt_pwr = sim_batt_pwr*BATT_EFF
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/BATT_EFF)*INV_EFF
         else:
-            stat_batt_pwr = sim_batt_pwr*BATT_EFF
+            stat_batt_pwr = sim_batt_pwr/BATT_EFF
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*BATT_EFF)*INV_EFF
 
         if real_inv_pwr > 800:
