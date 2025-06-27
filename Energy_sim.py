@@ -28,7 +28,7 @@ if debug == True:
 
 REAL_GRID_POWER_TOPIC = "energy/Power"
 REAL_SOLAR_POWER_TOPIC = "sim-data/Solar-Pwr"
-BATTERY_WH = 4800
+BATTERY_WH = 16600
 MIN_GRID_POWER = 50.0
 MAX_INV_POWER = 800.0
 CHR_CNTRL_EFF = 0.9
@@ -176,24 +176,24 @@ try:
         if req_battery_pwr > 0:
             if (battery_cap_wh > BATTERY_WH/10.0):
                 battery_state = "DISCHARGING"
-                sim_batt_pwr = req_battery_pwr/BATT_EFF
+                sim_batt_pwr = req_battery_pwr/(1-(1-BATT_EFF)/2)
             else:
                 battery_state = "EMPTY"
                 sim_batt_pwr = 0
         else:
             if battery_cap_wh < BATTERY_WH:
-                sim_batt_pwr = req_battery_pwr*BATT_EFF
+                sim_batt_pwr = req_battery_pwr*(1-(1-BATT_EFF)/2)
                 battery_state = "CHARGING"
             else:
                 sim_batt_pwr = 0
                 battery_state = "FULL"
         # print("REAL BATT PWR", sim_batt_pwr)
         if sim_batt_pwr < 0:
-            stat_batt_pwr = sim_batt_pwr/BATT_EFF
-            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/BATT_EFF)*INV_EFF
+            stat_batt_pwr = sim_batt_pwr/(1-(1-BATT_EFF)/2)
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/(1-(1-BATT_EFF)/2))*INV_EFF
         else:
             stat_batt_pwr = sim_batt_pwr*BATT_EFF
-            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*BATT_EFF)*INV_EFF
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*(1-(1-BATT_EFF)/2))*INV_EFF
 
         if real_inv_pwr > 800:
             real_inv_pwr = 800
