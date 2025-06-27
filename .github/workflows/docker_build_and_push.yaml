@@ -54,17 +54,21 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
-      - name: Export digest and upload
+      - name: Sanitize platform name
         run: |
           SAFE_PLATFORM="${{ matrix.platform }}"
           SAFE_PLATFORM="${SAFE_PLATFORM//\//_}"
+          echo "SAFE_PLATFORM=$SAFE_PLATFORM" >> $GITHUB_ENV
+
+      - name: Export digest and upload
+        run: |
           mkdir -p /tmp/digests
           echo "${{ steps.build.outputs.digest }}" > "/tmp/digests/${SAFE_PLATFORM}.digest"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform }}
+          name: digests-${{ env.SAFE_PLATFORM }}
           path: /tmp/digests/*.digest
           if-no-files-found: error
           retention-days: 1
