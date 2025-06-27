@@ -55,9 +55,10 @@ jobs:
 
       - name: Export digest
         run: |
+          SAFE_PLATFORM="${{ matrix.platform//\//_ }}"
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
-          echo "$digest" > "/tmp/digests/${{ matrix.platform }}.digest"
+          echo "$digest" > "/tmp/digests/${SAFE_PLATFORM}.digest"
 
       - name: Sanitize platform name
         run: |
