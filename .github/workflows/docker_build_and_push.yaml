@@ -56,7 +56,8 @@ jobs:
 
       - name: Export digest and upload
         run: |
-          SAFE_PLATFORM="${{ matrix.platform//\//_ }}"
+          SAFE_PLATFORM="${{ matrix.platform }}"
+          SAFE_PLATFORM="${SAFE_PLATFORM//\//_}"
           mkdir -p /tmp/digests
           echo "${{ steps.build.outputs.digest }}" > "/tmp/digests/${SAFE_PLATFORM}.digest"
 
