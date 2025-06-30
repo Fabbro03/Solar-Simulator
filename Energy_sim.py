@@ -30,7 +30,7 @@ REAL_GRID_POWER_TOPIC = "energy/Power"
 REAL_SOLAR_POWER_TOPIC = "sim-data/Solar-Pwr"
 BATTERY_WH = 16600
 MIN_GRID_POWER = 50.0
-MAX_INV_POWER = 800.0
+MAX_INV_POWER = 3000.0
 CHR_CNTRL_EFF = 0.9
 INV_EFF = 0.9
 BATT_EFF = 0.84
@@ -190,10 +190,12 @@ try:
         # print("REAL BATT PWR", sim_batt_pwr)
         if sim_batt_pwr < 0:
             stat_batt_pwr = sim_batt_pwr/(1-(1-BATT_EFF)/2)
-            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr/(1-(1-BATT_EFF)/2))*INV_EFF
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr /
+                            (1-(1-BATT_EFF)/2))*INV_EFF
         else:
             stat_batt_pwr = sim_batt_pwr*BATT_EFF
-            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr*(1-(1-BATT_EFF)/2))*INV_EFF
+            real_inv_pwr = (sim_solar_pwr+sim_batt_pwr *
+                            (1-(1-BATT_EFF)/2))*INV_EFF
 
         if real_inv_pwr > 800:
             real_inv_pwr = 800
