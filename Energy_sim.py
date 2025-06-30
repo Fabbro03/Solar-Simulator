@@ -167,7 +167,7 @@ try:
             if req_out_inv_pwr < 0:
                 req_out_inv_pwr = 0.0
         else:
-            req_out_inv_pwr = 800.0
+            req_out_inv_pwr = MAX_INV_POWER
         # print("R INV OUT", req_out_inv_pwr)
         req_in_inv_pwr = req_out_inv_pwr/INV_EFF
         # print("R INV IN", req_in_inv_pwr)
@@ -197,8 +197,8 @@ try:
             real_inv_pwr = (sim_solar_pwr+sim_batt_pwr *
                             (1-(1-BATT_EFF)/2))*INV_EFF
 
-        if real_inv_pwr > 800:
-            real_inv_pwr = 800
+        if real_inv_pwr > MAX_INV_POWER:
+            real_inv_pwr = MAX_INV_POWER
 
         # print("REAL INV OUT", real_inv_pwr)
         sim_grid_pwr = grid_pwr - real_inv_pwr
